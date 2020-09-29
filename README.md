@@ -1,6 +1,6 @@
 # NLog.Mongo
 
-Writes NLog messages to MongoDB.
+Writes NLog messages to RavenDB.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/papk0yl4xf7agyxt)](https://ci.appveyor.com/project/LoreSoft/nlog-mongo)
 
