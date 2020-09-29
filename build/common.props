@@ -9,15 +9,15 @@
   <Import Project="sourcelink.props" Condition="'$(ProjectParentDirectoryName)' == 'src'" />
 
   <PropertyGroup Label="Package">
-    <Description>NLog MongoDB target</Description>
-    <Copyright>Copyright © 2020 LoreSoft</Copyright>
-    <Authors>LoreSoft</Authors>
+    <Description>NLog RavenDB target</Description>
+    <Copyright>Copyright © 2020 F4ST</Copyright>
+    <Authors>F4ST</Authors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageTags>NLog;Logging;MongoDB</PackageTags>
+    <PackageTags>NLog;Logging;RavenDB</PackageTags>
     <PackageOutputPath>$(SolutionDir)artifacts</PackageOutputPath>
-    <PackageProjectUrl>https://github.com/loresoft/NLog.Mongo</PackageProjectUrl>
-    <PackageLicenseUrl>https://raw.githubusercontent.com/loresoft/NLog.Mongo/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/loresoft/NLog.Raven</PackageProjectUrl>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/loresoft/NLog.Raven/master/LICENSE</PackageLicenseUrl>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/loresoft/NLog.Mongo</RepositoryUrl>
+    <RepositoryUrl>https://github.com/loresoft/NLog.Raven</RepositoryUrl>
   </PropertyGroup>
 </Project>

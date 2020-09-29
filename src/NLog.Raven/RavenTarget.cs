@@ -1,67 +1,38 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using MongoDB.Bson;
-using MongoDB.Driver;
 using NLog.Common;
 using NLog.Config;
 using NLog.Layouts;
 using NLog.Targets;
+using Raven.Client.Documents;
+using Raven.Client.Documents.Conventions;
 
-namespace NLog.Mongo
+namespace NLog.Raven
 {
     /// <summary>
-    /// NLog message target for MongoDB.
+    /// NLog message target for RavenDB.
     /// </summary>
-    [Target("Mongo")]
-    public class MongoTarget : Target
+    [Target("Raven")]
+    public class RavenTarget : Target
     {
-        private struct MongoConnectionKey : IEquatable<MongoConnectionKey>
-        {
-            private readonly string ConnectionString;
-            private readonly string CollectionName;
-            private readonly string DatabaseName;
-
-            public MongoConnectionKey(string connectionString, string collectionName, string databaseName)
-            {
-                ConnectionString = connectionString ?? string.Empty;
-                CollectionName = collectionName ?? string.Empty;
-                DatabaseName = databaseName ?? string.Empty;
-            }
-
-            public bool Equals(MongoConnectionKey other)
-            {
-                return ConnectionString == other.ConnectionString
-                    && CollectionName == other.CollectionName
-                    && DatabaseName == other.DatabaseName;
-            }
-
-            public override int GetHashCode()
-            {
-                return ConnectionString.GetHashCode() ^ CollectionName.GetHashCode() ^ DatabaseName.GetHashCode();
-            }
-
-            public override bool Equals(object obj)
-            {
-                return obj is MongoConnectionKey && Equals((MongoConnectionKey)obj);
-            }
-        }
-
-        private static readonly ConcurrentDictionary<MongoConnectionKey, IMongoCollection<BsonDocument>> _collectionCache = new ConcurrentDictionary<MongoConnectionKey, IMongoCollection<BsonDocument>>();
-        private Func<AsyncLogEventInfo, BsonDocument> _createDocumentDelegate;
+        //private static readonly ConcurrentDictionary<MongoConnectionKey, IMongoCollection<BsonDocument>> _collectionCache = new ConcurrentDictionary<MongoConnectionKey, IMongoCollection<BsonDocument>>();
+        private Func<AsyncLogEventInfo, dynamic> _createDocumentDelegate;
         private static readonly LogEventInfo _defaultLogEvent = NLog.LogEventInfo.CreateNullEvent();
+        private IDocumentStore _connection;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MongoTarget"/> class.
+        /// Initializes a new instance of the <see cref="RavenTarget"/> class.
         /// </summary>
-        public MongoTarget()
+        public RavenTarget()
         {
-            Fields = new List<MongoField>();
-            Properties = new List<MongoField>();
+            Fields = new List<RavenField>();
+            Properties = new List<RavenField>();
             IncludeDefaults = true;
             OptimizeBufferReuse = true;
             IncludeEventProperties = true;
@@ -73,8 +44,8 @@ namespace NLog.Mongo
         /// <value>
         /// The fields.
         /// </value>
-        [ArrayParameter(typeof(MongoField), "field")]
-        public IList<MongoField> Fields { get; private set; }
+        //[ArrayParameter(typeof(RavenField), "field")]
+        public IList<RavenField> Fields { get; private set; }
 
         /// <summary>
         /// Gets the properties collection.
@@ -82,8 +53,8 @@ namespace NLog.Mongo
         /// <value>
         /// The properties.
         /// </value>
-        [ArrayParameter(typeof(MongoField), "property")]
-        public IList<MongoField> Properties { get; private set; }
+        //[ArrayParameter(typeof(RavenField), "property")]
+        public IList<RavenField> Properties { get; private set; }
 
         /// <summary>
         /// Gets or sets the connection string name string.
@@ -91,20 +62,12 @@ namespace NLog.Mongo
         /// <value>
         /// The connection name string.
         /// </value>
-        public string ConnectionString
+        public string ServerAddress
         {
-            get => (_connectionString as SimpleLayout)?.Text;
-            set => _connectionString = value ?? string.Empty;
+            get => (_serverAddress as SimpleLayout)?.Text;
+            set => _serverAddress = value ?? string.Empty;
         }
-        private Layout _connectionString;
-
-        /// <summary>
-        /// Gets or sets the name of the connection.
-        /// </summary>
-        /// <value>
-        /// The name of the connection.
-        /// </value>
-        public string ConnectionName { get; set; }
+        private Layout _serverAddress;
 
         /// <summary>
         /// Gets or sets a value indicating whether to use the default document format.
@@ -128,19 +91,6 @@ namespace NLog.Mongo
         private Layout _databaseName;
 
         /// <summary>
-        /// Gets or sets the name of the collection.
-        /// </summary>
-        /// <value>
-        /// The name of the collection.
-        /// </value>
-        public string CollectionName
-        {
-            get => (_collectionName as SimpleLayout)?.Text;
-            set => _collectionName = value ?? string.Empty;
-        }
-        private Layout _collectionName;
-
-        /// <summary>
         /// Gets or sets the size in bytes of the capped collection.
         /// </summary>
         /// <value>
@@ -157,7 +107,7 @@ namespace NLog.Mongo
         public long? CappedCollectionMaxItems { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to include per-event properties in the payload sent to MongoDB
+        /// Gets or sets a value indicating whether to include per-event properties in the payload sent to RavenDB
         /// </summary>
         public bool IncludeEventProperties { get; set; }
 
@@ -165,17 +115,24 @@ namespace NLog.Mongo
         /// Initializes the target. Can be used by inheriting classes
         /// to initialize logging.
         /// </summary>
-        /// <exception cref="NLog.NLogConfigurationException">Can not resolve MongoDB ConnectionString. Please make sure the ConnectionString property is set.</exception>
+        /// <exception cref="NLog.NLogConfigurationException">Can not resolve RavenDB ConnectionString. Please make sure the ConnectionString property is set.</exception>
         protected override void InitializeTarget()
         {
             base.InitializeTarget();
 
-            if (!string.IsNullOrEmpty(ConnectionName))
-                ConnectionString = GetConnectionString(ConnectionName);
+            _connection = new DocumentStore()
+            {
+                Urls = new[] { ServerAddress },
+                Database = DatabaseName,
 
-            var connectionString = _connectionString?.Render(_defaultLogEvent);
-            if (string.IsNullOrEmpty(connectionString))
-                throw new NLogConfigurationException("Can not resolve MongoDB ConnectionString. Please make sure the ConnectionString property is set.");
+                Conventions =
+                {
+                    FindCollectionName = type => type.Name==nameof(RavenDataBag)
+                        ? "Log"
+                        :DocumentConventions.DefaultGetCollectionName(type)
+                }
+            };
+            _connection.Initialize();
         }
 
         /// <summary>
@@ -195,15 +152,21 @@ namespace NLog.Mongo
                     _createDocumentDelegate = e => CreateDocument(e.LogEvent);
 
                 var documents = logEvents.Select(_createDocumentDelegate);
-                var collection = GetCollection();
-                collection.InsertMany(documents);
+
+                using (var bulk = _connection.BulkInsert())
+                {
+                    foreach (var entity in documents)
+                    {
+                        bulk.Store(entity);
+                    }
+                }
 
                 for (int i = 0; i < logEvents.Count; ++i)
                     logEvents[i].Continuation(null);
             }
             catch (Exception ex)
             {
-                InternalLogger.Error("Error when writing to MongoDB {0}", ex);
+                InternalLogger.Error("Error when writing to RavenDB {0}", ex);
 
                 if (ex.MustBeRethrownImmediately())
                     throw;
@@ -226,20 +189,25 @@ namespace NLog.Mongo
             try
             {
                 var document = CreateDocument(logEvent);
-                var collection = GetCollection();
-                collection.InsertOne(document);
+                using (var session = _connection.OpenSession())
+                {
+                    session.Store(document);
+                    session.SaveChanges();
+                }
             }
             catch (Exception ex)
             {
-                InternalLogger.Error("Error when writing to MongoDB {0}", ex);
+                InternalLogger.Error("Error when writing to RavenDB {0}", ex);
 
                 throw;
             }
         }
 
-        private BsonDocument CreateDocument(LogEventInfo logEvent)
+        private dynamic CreateDocument(LogEventInfo logEvent)
         {
-            var document = new BsonDocument();
+            dynamic document = new RavenDataBag(); //new ExpandoObject();
+            //IDictionary<string, object> myUnderlyingObject = document;
+
             if (IncludeDefaults || Fields.Count == 0)
                 AddDefaults(document, logEvent);
 
@@ -256,28 +224,30 @@ namespace NLog.Mongo
             return document;
         }
 
-        private void AddDefaults(BsonDocument document, LogEventInfo logEvent)
+        private void AddDefaults(RavenDataBag document, LogEventInfo logEvent)
         {
-            document.Add("Date", new BsonDateTime(logEvent.TimeStamp));
+            document["Date"] = logEvent.TimeStamp;
 
             if (logEvent.Level != null)
-                document.Add("Level", new BsonString(logEvent.Level.Name));
+                document["Level"] = logEvent.Level.Name;
 
             if (logEvent.LoggerName != null)
-                document.Add("Logger", new BsonString(logEvent.LoggerName));
+                document["Logger"] = logEvent.LoggerName;
 
             if (logEvent.FormattedMessage != null)
-                document.Add("Message", new BsonString(logEvent.FormattedMessage));
+                document["Message"] = logEvent.FormattedMessage;
 
             if (logEvent.Exception != null)
-                document.Add("Exception", CreateException(logEvent.Exception));
+                document["Exception"] = CreateException(logEvent.Exception);
         }
 
-        private void AddProperties(BsonDocument document, LogEventInfo logEvent)
+        private void AddProperties(RavenDataBag document, LogEventInfo logEvent)
         {
             if (logEvent.HasProperties || Properties.Count > 0)
             {
-                var propertiesDocument = new BsonDocument();
+                dynamic propertiesDocument = new RavenDataBag(); //new ExpandoObject();
+                //IDictionary<string, object> myUnderlyingObject = propertiesDocument;
+
                 for (int i = 0; i < Properties.Count; ++i)
                 {
                     string key = Properties[i].Name;
@@ -305,42 +275,43 @@ namespace NLog.Mongo
                         if (key.IndexOf('.') >= 0)
                             key = key.Replace('.', '_');
 
-                        propertiesDocument[key] = new BsonString(value);
+                        propertiesDocument[key] = value;
                     }
                 }
 
-                if (propertiesDocument.ElementCount > 0)
-                    document.Add("Properties", propertiesDocument);
+                //if (myUnderlyingObject.Count > 0)
+                document["Properties"] = propertiesDocument;
             }
         }
 
-        private BsonValue CreateException(Exception exception)
+        private dynamic CreateException(Exception exception)
         {
             if (exception == null)
-                return BsonNull.Value;
+                return null;
 
-            var document = new BsonDocument();
-            document.Add("Message", new BsonString(exception.Message));
-            document.Add("BaseMessage", new BsonString(exception.GetBaseException().Message));
-            document.Add("Text", new BsonString(exception.ToString()));
-            document.Add("Type", new BsonString(exception.GetType().ToString()));
+            dynamic document = new RavenDataBag(); //new ExpandoObject();
+            //IDictionary<string, object> myUnderlyingObject = document;
+            document["Message"] = exception.Message;
+            document["BaseMessage"] = exception.GetBaseException().Message;
+            document["Text"] = exception.ToString();
+            document["Type"] = exception.GetType().ToString();
 
 #if !NETSTANDARD1_5
             if (exception is ExternalException external)
-                document.Add("ErrorCode", new BsonInt32(external.ErrorCode));
+                document["ErrorCode"] = external.ErrorCode;
 #endif
-            document.Add("HResult", new BsonInt32(exception.HResult));
-            document.Add("Source", new BsonString(exception.Source));
+            document["HResult"] = exception.HResult;
+            document["Source"] = exception.Source;
 
 #if !NETSTANDARD1_5
             var method = exception.TargetSite;
             if (method != null)
             {
-                document.Add("MethodName", new BsonString(method.Name));
+                document["MethodName"] = method.Name;
 
                 AssemblyName assembly = method.Module.Assembly.GetName();
-                document.Add("ModuleName", new BsonString(assembly.Name));
-                document.Add("ModuleVersion", new BsonString(assembly.Version.ToString()));
+                document["ModuleName"] = assembly.Name;
+                document["ModuleVersion"] = assembly.Version.ToString();
             }
 #endif
 
@@ -348,14 +319,14 @@ namespace NLog.Mongo
         }
 
 
-        private BsonValue GetValue(MongoField field, LogEventInfo logEvent)
+        private object GetValue(RavenField field, LogEventInfo logEvent)
         {
             var value = (field.Layout != null ? RenderLogEvent(field.Layout, logEvent) : string.Empty).Trim();
-            if (string.IsNullOrEmpty(value))
+            return value;
+            /*if (string.IsNullOrEmpty(value))
                 return null;
 
-            if (string.IsNullOrEmpty(field.BsonType)
-                || string.Equals(field.BsonType, "String", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(field.BsonType, "String", StringComparison.OrdinalIgnoreCase))
                 return new BsonString(value);
 
             BsonValue bsonValue;
@@ -379,20 +350,20 @@ namespace NLog.Mongo
                 && MongoConvert.TryInt64(value, out bsonValue))
                 return bsonValue;
 
-            return new BsonString(value);
+            return new BsonString(value);*/
         }
 
-        private IMongoCollection<BsonDocument> GetCollection()
+        /*private IMongoCollection<BsonDocument> GetCollection()
         {
-            string connectionString = _connectionString != null ? RenderLogEvent(_connectionString, _defaultLogEvent) : string.Empty;
+            string connectionString = _serverAddress != null ? RenderLogEvent(_serverAddress, _defaultLogEvent) : string.Empty;
             string collectionName = _collectionName != null ? RenderLogEvent(_collectionName, _defaultLogEvent) : string.Empty;
             string databaseName = _databaseName != null ? RenderLogEvent(_databaseName, _defaultLogEvent) : string.Empty;
 
             if (string.IsNullOrEmpty(connectionString))
-                throw new NLogConfigurationException("Can not resolve MongoDB ConnectionString. Please make sure the ConnectionString property is set.");
+                throw new NLogConfigurationException("Can not resolve RavenDB ConnectionString. Please make sure the ConnectionString property is set.");
 
             // cache mongo collection based on target name.
-            var key = new MongoConnectionKey(connectionString, collectionName, databaseName);
+            var key = new RavenConnectionKey(connectionString, collectionName, databaseName);
             if (_collectionCache.TryGetValue(key, out var mongoCollection))
                 return mongoCollection;
 
@@ -403,7 +374,7 @@ namespace NLog.Mongo
 
                 databaseName = !string.IsNullOrEmpty(databaseName) ? databaseName : (mongoUrl.DatabaseName ?? "NLog");
                 collectionName = !string.IsNullOrEmpty(collectionName) ? collectionName : "Log";
-                InternalLogger.Info("Connecting to MongoDB collection {0} in database {1}", collectionName, databaseName);
+                InternalLogger.Info("Connecting to RavenDB collection {0} in database {1}", collectionName, databaseName);
 
                 var client = new MongoClient(mongoUrl);
 
@@ -412,12 +383,12 @@ namespace NLog.Mongo
 
                 if (CappedCollectionSize.HasValue)
                 {
-                    InternalLogger.Debug("Checking for existing MongoDB collection {0} in database {1}", collectionName, databaseName);
+                    InternalLogger.Debug("Checking for existing RavenDB collection {0} in database {1}", collectionName, databaseName);
                     
                     var filterOptions = new ListCollectionNamesOptions { Filter = new BsonDocument("name", collectionName) };
                     if (!database.ListCollectionNames(filterOptions).Any())
                     {
-                        InternalLogger.Debug("Creating new MongoDB collection {0} in database {1}", collectionName, databaseName);
+                        InternalLogger.Debug("Creating new RavenDB collection {0} in database {1}", collectionName, databaseName);
 
                         // create capped
                         var options = new CreateCollectionOptions
@@ -432,13 +403,13 @@ namespace NLog.Mongo
                 }
 
                 var collection = database.GetCollection<BsonDocument>(collectionName);
-                InternalLogger.Debug("Retrieved MongoDB collection {0} from database {1}", collectionName, databaseName);
+                InternalLogger.Debug("Retrieved RavenDB collection {0} from database {1}", collectionName, databaseName);
                 return collection;
             });
-        }
+        }*/
 
 
-        private static string GetConnectionString(string connectionName)
+        /*private static string GetConnectionString(string connectionName)
         {
             if (connectionName == null)
                 throw new ArgumentNullException(nameof(connectionName));
@@ -456,6 +427,6 @@ namespace NLog.Mongo
 
             return connectionString;
 #endif
-        }
+        }*/
     }
 }

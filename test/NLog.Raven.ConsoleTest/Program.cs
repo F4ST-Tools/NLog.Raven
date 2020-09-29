@@ -2,7 +2,7 @@
 using System.IO;
 using NLog.Fluent;
 
-namespace NLog.Mongo.ConsoleTest
+namespace NLog.Raven.ConsoleTest
 {
     public class Program
     {
@@ -26,7 +26,7 @@ namespace NLog.Mongo.ConsoleTest
                 .Property("Test", "Tesing properties")
                 .Write();
 
-            string path = "blah.txt";
+            /*string path = "blah.txt";
             try
             {
                 string text = File.ReadAllText(path);
@@ -38,7 +38,7 @@ namespace NLog.Mongo.ConsoleTest
                     .Exception(ex)
                     .Property("Test", "ErrorWrite")
                     .Write();
-            }
+            }*/
 
             Console.ReadLine();
         }

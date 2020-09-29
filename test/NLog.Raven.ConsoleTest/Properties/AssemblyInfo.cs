@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("NLog.Mongo.ConsoleTest")]
+[assembly: AssemblyTitle("NLog.Raven.ConsoleTest")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Novus Media Inc")]
-[assembly: AssemblyProduct("NLog.Mongo.ConsoleTest")]
+[assembly: AssemblyProduct("NLog.Raven.ConsoleTest")]
 [assembly: AssemblyCopyright("Copyright © Novus Media Inc 2013")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

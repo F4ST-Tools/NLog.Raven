@@ -2,7 +2,7 @@
 using System.Threading;
 using NLog.Common;
 
-namespace NLog.Mongo
+namespace NLog.Raven
 {
     internal static class ExceptionHelper
     {

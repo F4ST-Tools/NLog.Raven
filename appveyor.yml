@@ -19,7 +19,7 @@ dotnet_csproj:
 configuration: Release
 
 build_script:
-  - dotnet pack NLog.Mongo.sln --configuration Release --include-symbols --include-source
+  - dotnet pack NLog.Raven.sln --configuration Release --include-symbols --include-source
 
 artifacts:
 - path: artifacts\*.nupkg
